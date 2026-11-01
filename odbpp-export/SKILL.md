@@ -53,7 +53,22 @@ into the user's version-controlled sources unless they ask.
 
 ## 5. Hand over to Hefex
 
-- With the Hefex MCP server connected: create a project and upload the archive with the
-  upload command the server returns, then wait for the parse status.
-- Without it: tell the user where the archive is and that they can upload it at
-  https://prototyping.hefex-labs.com.
+With the Hefex MCP server connected (tools named `hefex_*`):
+
+1. `hefex_create_project` with the board's name (for example the `.kicad_pcb` file name
+   without extension). Skip this if the user names an existing Hefex project; find it with
+   `hefex_list_projects`.
+2. `hefex_get_upload_command` with the project id and the archive's file name.
+3. Run the returned command (`command_windows` on Windows, else `command_posix`) in the
+   folder that holds the archive. The link works once and expires after 15 minutes; on
+   any failure ask for a new command instead of retrying the old one.
+4. Poll `hefex_get_parse_status` every few seconds until `status` is `done` or `failed`.
+   On `failed`, show `error_message` and stop.
+5. Ask the user for the quantity (boards to fabricate; assembled boards default to all of
+   them), then `hefex_get_quote` with `price_if_missing=true` and `hefex_check_parts`.
+   Report the total, and every part that is not in stock with the suggested alternatives.
+6. Point the user to the project's `portal_url` for what only the portal does: confirming
+   the PCB and the parts, requesting and accepting the offer.
+
+Without the MCP server: tell the user where the archive is and that they can upload it at
+https://prototyping.hefex-labs.com.
