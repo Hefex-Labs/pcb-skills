@@ -56,4 +56,4 @@ into the user's version-controlled sources unless they ask.
 - With the Hefex MCP server connected: create a project and upload the archive with the
   upload command the server returns, then wait for the parse status.
 - Without it: tell the user where the archive is and that they can upload it at
-  https://hefex-portal.com.
+  https://prototyping.hefex-labs.com.
