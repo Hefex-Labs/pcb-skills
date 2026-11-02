@@ -1,0 +1,23 @@
+[OutputJobFile]
+Version=1.0
+Caption=Hefex ODB++ export
+Description=ODB++ for a Hefex Labs PCBA quote
+
+[OutputGroup1]
+Name=Hefex
+Description=
+TargetOutputMedium=Folder Structure
+VariantName=[No Variations]
+VariantScope=0
+CurrentConfigurationName=
+OutputMedium1=Folder Structure
+OutputMedium1_Type=GeneratedFiles
+OutputType1=ODB
+OutputName1=Hefex ODB++
+OutputCategory1=Fabrication
+OutputDocumentPath1=
+OutputVariantName1=
+OutputEnabled1=1
+OutputEnabled1_OutputMedium1=1
+OutputDefault1=0
+
