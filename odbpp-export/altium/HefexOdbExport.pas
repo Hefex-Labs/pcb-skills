@@ -8,6 +8,11 @@
 //   [Export]
 //   Project=C:\path\Board.PrjPcb   ; required
 //   AddOutJob=0                    ; 1 = the customer agreed to add Hefex.OutJob
+//   AllowUnsaved=0                 ; 1 = export even with unsaved documents
+//
+// Unsaved project documents stop the export (error: unsaved_documents, each
+// one listed as "unsaved: <path>"), so nobody orders a state they did not save,
+// unless AllowUnsaved=1.
 //
 // Order: use an ODB++ output job that is already part of the project; only
 // when there is none and AddOutJob=1, copy Hefex.OutJob next to the project,
@@ -89,6 +94,26 @@ Begin
     End;
 End;
 
+// Logs every project document that is open with unsaved changes; returns their number.
+Function UnsavedDocuments(Project : IProject) : Integer;
+Var I : Integer; Path : String; D : IServerDocument;
+Begin
+    Result := 0;
+    For I := 0 To Project.DM_LogicalDocumentCount - 1 Do
+    Begin
+        Path := Project.DM_LogicalDocuments(I).DM_FullPath;
+        If Client.IsDocumentOpen(Path) Then
+        Begin
+            D := Client.GetDocumentByPath(Path);
+            If (D <> Nil) And D.Modified Then
+            Begin
+                Log('unsaved: ' + Path);
+                Result := Result + 1;
+            End;
+        End;
+    End;
+End;
+
 Function AddHefexJob(Project : IProject) : String;
 Var Lines : TStringList; Target : String; ProjDoc : IServerDocument;
 Begin
@@ -110,7 +135,7 @@ Begin
 End;
 
 Procedure ExportOdb;
-Var Ini : TIniFile; ProjectPath, JobPath, Medium : String; AddJob : Boolean;
+Var Ini : TIniFile; ProjectPath, JobPath, Medium : String; AddJob, AllowUnsaved : Boolean;
     Project : IProject; Doc : IServerDocument;
 Begin
   Try
@@ -120,6 +145,7 @@ Begin
     Try
         ProjectPath := Ini.ReadString('Export', 'Project', '');
         AddJob := Ini.ReadString('Export', 'AddOutJob', '0') = '1';
+        AllowUnsaved := Ini.ReadString('Export', 'AllowUnsaved', '0') = '1';
     Finally
         Ini.Free;
     End;
@@ -137,6 +163,8 @@ Begin
     End;
     If Project = Nil Then Begin Log('error: project_not_open ' + ProjectPath); Exit; End;
     Log('project: ' + Project.DM_ProjectFullPath);
+    If (UnsavedDocuments(Project) > 0) And Not AllowUnsaved Then
+    Begin Log('error: unsaved_documents'); Exit; End;
 
     JobPath := ProjectOdbJob(Project);
     If JobPath <> '' Then Log('outjob: existing ' + JobPath)

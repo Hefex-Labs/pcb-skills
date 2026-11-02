@@ -9,7 +9,42 @@ Hefex reads one ODB++ archive per board: outline, layers, placements and BOM all
 from it. No separate Gerber, pick-and-place or BOM files are needed.
 
 Which tool: a `.kicad_pcb` or `.kicad_pro` means KiCad (sections 1 to 4), a `.PrjPcb` means
-Altium Designer (section A). Section 5, the hand-over to Hefex, is the same for both.
+Altium Designer (section A). Section 0 (state of the tool) and section 5 (hand-over to
+Hefex) apply to both.
+
+## 0. Before the export: state of the EDA tool
+
+Check this first, tell the user what you found, and never act around the user's
+running session. Exporting the wrong state or fighting a busy tool is the main
+source of friction.
+
+| | Tool closed | Tool open |
+|---|---|---|
+| KiCad | `kicad-cli` reads the saved `.kicad_pcb`; nothing else is needed. | Still works on the **saved** file only: unsaved edits in the editor are not exported. A lock file `~<board>.kicad_pcb.lck` next to the board means it is open. |
+| Altium | The export command starts Altium itself, opens the project and exports (about 40 s, more on a first start with sign-in or licence dialogs). | The script runs in the open instance. Only one script can run at a time; a modal dialog blocks it. Unsaved documents are refused unless allowed (see A3). |
+
+KiCad, always:
+- If a lock file exists, ask the user to save the board (and to refill zones with `B`
+  if copper pours changed) before exporting.
+- Never write into the project folder except the export archive the user agreed to;
+  put DRC reports in a temporary folder. Do not use `--save-board`: it rewrites the
+  user's board.
+- `kicad-cli pcb drc --refill-zones` checks with fresh zones but does not change the
+  file or the export; mention stale zones if DRC reports them.
+
+Altium, always:
+- Ask whether the user is working in Altium right now. Do not start the export while
+  they are in the middle of a session or while a dialog is open; ask them to close it.
+- One run at a time: send `X2.EXE -REditScript:Stop` before each run (it clears a script
+  paused after an error, and is harmless otherwise), start exactly one run and wait for
+  its status file. Never start a second run while the first may still be working, and
+  never retry blindly.
+- If Altium cannot be closed or says another script is executing, a script is paused in
+  the debugger: send `X2.EXE -REditScript:Stop` (or the user chooses Run > Stop,
+  Ctrl+F3, in the script editor).
+- Altium's command-line switches are not officially documented; this flow is tested on
+  Altium Designer 26 Standard. If anything behaves differently, stop and tell the user
+  instead of experimenting in their running instance.
 
 ## 1. Find `kicad-cli`
 
@@ -85,9 +120,13 @@ changed."). Then write `C:\Users\Public\Documents\Hefex\altium\export.ini`:
 [Export]
 Project=C:\full\path\Board.PrjPcb
 AddOutJob=1
+AllowUnsaved=0
 ```
 
 `AddOutJob=0` when the user declined; the script then stops with `error: no_odb_outjob`.
+With unsaved documents the script lists them (`unsaved: <path>`) and stops with
+`error: unsaved_documents`: ask the user to save, or set `AllowUnsaved=1` only if they
+explicitly want the unsaved state exported.
 
 ### A4. Run it exactly once
 
