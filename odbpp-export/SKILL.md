@@ -111,8 +111,8 @@ The part stays in the archive; only the flag marks it.
   `FOOTPRINT.AddVariant(name).SetDNP(True)`, then `BOARD.Save`). By script only on their explicit request,
   with KiCad closed, and on a copy first, since it rewrites their board.
 
-Hefex does not read `.no_pop` yet: the parts still appear in the quote. Section 5 says
-how to leave them off.
+Hefex reads `.no_pop` (since 2026-11-06): such parts are neither bought nor placed.
+Check it in the quote (section 5).
 
 ## 3. Check before export
 
@@ -292,10 +292,13 @@ With the Hefex MCP server connected (tools named `hefex_*`):
 5. Ask the user for the quantity (boards to fabricate; assembled boards default to all of
    them), then `hefex_get_quote` with `price_if_missing=true` and `hefex_check_parts`.
    Report the total, and every part that is not in stock with the suggested alternatives.
-6. Parts that are not populated (KiCad `.no_pop`, Altium Not Fitted in the exported
-   variant) still appear in the quote: Hefex does not read these flags yet. With the
-   user's consent, set each of them to `dnp` with `hefex_set_part_override` (MPN as
-   described for that tool), then quote again until `search_pending` is 0.
+6. Parts that are not populated:
+   - KiCad (`.no_pop`): Hefex leaves them off by itself. Check that none of them is in
+     the quote; if one is, set it as below.
+   - Altium Not Fitted in the exported variant: Hefex does not read variants yet, so
+     these parts are in the quote. With the user's consent, set each of them to `dnp`
+     with `hefex_set_part_override` (MPN as described for that tool).
+   Then quote again until `search_pending` is 0.
 7. Point the user to the project's `portal_url` for what only the portal does: confirming
    the PCB and the parts, requesting and accepting the offer.
 

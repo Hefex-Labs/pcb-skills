@@ -17,7 +17,7 @@ npx skills add Hefex-Labs/skills -a codex
 
 | Skill | Purpose |
 |---|---|
-| [`odbpp-export`](odbpp-export/SKILL.md) | Export a KiCad board as ODB++ for a Hefex quote |
+| [`odbpp-export`](odbpp-export/SKILL.md) | Export a KiCad or Altium Designer board as ODB++ for a Hefex quote, including do-not-populate parts and assembly variants |
 
 ## Layout
 
