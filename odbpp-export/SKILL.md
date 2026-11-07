@@ -21,7 +21,7 @@ source of friction.
 | | Tool closed | Tool open |
 |---|---|---|
 | KiCad | `kicad-cli` reads the saved `.kicad_pcb`; nothing else is needed. | Still works on the **saved** file only: unsaved edits in the editor are not exported. A lock file `~<board>.kicad_pcb.lck` next to the board means it is open. |
-| Altium | Ask the user to start Altium and wait until its main window is up. `run.ps1` refuses to start without it: started by a script, Altium once came up without any window and accepted no script. | The script runs in the open instance. Only one script can run at a time; a modal dialog blocks it. Unsaved documents are refused unless allowed (see A4). |
+| Altium | Ask the user to start Altium and wait until its main window is up. `run.ps1` refuses to start without it: started by a script, Altium once came up without any window and accepted no script. | The script runs in the open instance. Only one script can run at a time; a modal dialog blocks it. The export uses the **saved** files: unsaved edits are not in it (see A4). |
 
 KiCad, always:
 - If a lock file exists, ask the user to save the board (and to refill zones with `B`
@@ -231,9 +231,12 @@ AllowUnsaved=0
   allowing it ("This adds one output job file to your Altium project and saves the
   project; the board is not changed."). `AddOutJob=0` when the user declined; the
   script then stops with `error: no_odb_outjob` (or `no_odb_outjob_for_variant`).
-- With unsaved documents the script lists them (`unsaved: <path>`) and stops with
-  `error: unsaved_documents`: ask the user to save, or set `AllowUnsaved=1` only if they
-  explicitly want the unsaved state exported.
+- Saved state: the export always uses the saved files; unsaved edits are simply not in
+  it (tested: a moved but unsaved part kept its saved position). The script's check for
+  unsaved documents (`unsaved: <path>`, `error: unsaved_documents`, bypassed by
+  `AllowUnsaved=1`) does not see edits in the PCB editor: Altium reports such a PCB as
+  not modified. So whenever the user may have been editing, ask whether everything is
+  saved before the export, and say that unsaved changes would be missing.
 
 Run it with the kit's runner, from PowerShell, and wait for it to return:
 

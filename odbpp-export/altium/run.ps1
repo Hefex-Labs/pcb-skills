@@ -50,7 +50,12 @@ $procs = @(Get-Process X2 -ErrorAction SilentlyContinue)
 # Started by a script, Altium once came up without any window; the user starts it.
 if ($procs.Count -eq 0) { "error: Altium is not running; ask the user to start it and wait for its main window"; exit 6 }
 if ($procs.Count -gt 1) { "error: several Altium processes ($($procs.Id -join ', '))"; exit 4 }
-if (-not $procs[0].MainWindowTitle) { "error: Altium has no main window yet (still starting?)"; exit 6 }
+# Process.MainWindowTitle is often empty although Altium is up; look for the window itself.
+$A = [System.Windows.Automation.AutomationElement]
+$cond = New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, $procs[0].Id)
+$main = @($A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond) |
+    Where-Object { $_.Current.Name -match 'Altium Designer' })
+if (-not $main) { "error: Altium has no main window yet (still starting?)"; exit 6 }
 $d = Get-AltiumDialogs
 if ($d) { "error: dialog open"; $d | ForEach-Object { "dialog: $_" }; exit 2 }
 # Clears a script paused in the debugger; harmless otherwise.
