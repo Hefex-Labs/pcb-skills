@@ -1,6 +1,6 @@
 ---
 name: odbpp-export
-description: Export a KiCad or Altium Designer PCB as an ODB++ archive for a Hefex Labs PCBA quote or order. Use when the user wants to quote, order or upload a KiCad or Altium board to Hefex, or asks for an ODB++ export.
+description: Prepare a saved KiCad or Altium Designer board for ODB++ export, including assembly variants and do-not-populate parts. Use for a local manufacturing archive or when a user asks to upload or quote the board with Hefex.
 ---
 
 # ODB++ export for Hefex (KiCad, Altium Designer)
@@ -9,8 +9,9 @@ Hefex reads one ODB++ archive per board: outline, layers, placements and BOM all
 from it. No separate Gerber, pick-and-place or BOM files are needed.
 
 Which tool: a `.kicad_pcb` or `.kicad_pro` means KiCad (sections 1 to 4), a `.PrjPcb` means
-Altium Designer (section A). Section 0 (state of the tool) and section 5 (hand-over to
-Hefex) apply to both.
+Altium Designer (section A). Start with section 0 for either tool. For a local export,
+finish by reporting the archive path, selected variant and any issues. Use section 5
+only when the user asks to send the board to Hefex or get a quote.
 
 ## 0. Before the export: state of the EDA tool
 
@@ -116,13 +117,15 @@ Check it in the quote (section 5).
 
 ## 3. Check before export
 
-Run the design rules check and report errors to the user before going on:
+Run the design rules check from a temporary folder, substituting the absolute saved
+board path below. Report errors before going on:
 
 ```bash
-kicad-cli pcb drc --severity-error --exit-code-violations -o drc.rpt board.kicad_pcb
+kicad-cli pcb drc --severity-error --exit-code-violations -o drc.rpt "<absolute path to board.kicad_pcb>"
 ```
 
-A non-zero exit code means violations. Show them and ask whether to continue.
+If the report lists violations, show them and ask whether to continue. If the command
+failed to read the board or run the check, report the error before treating the board as checked.
 
 Parts are priced by manufacturer part number. Footprints without an `MPN` field
 (also accepted: `Manufacturer_Part_Number`, `MFR_PN`, `Part_Number` and similar) cannot be
@@ -289,18 +292,20 @@ With the Hefex MCP server connected (tools named `hefex_*`):
    any failure ask for a new command instead of retrying the old one.
 4. Poll `hefex_get_parse_status` every few seconds until `status` is `done` or `failed`.
    On `failed`, show `error_message` and stop.
-5. Ask the user for the quantity (boards to fabricate; assembled boards default to all of
-   them), then `hefex_get_quote` with `price_if_missing=true` and `hefex_check_parts`.
-   Report the total, and every part that is not in stock with the suggested alternatives.
-6. Parts that are not populated:
-   - KiCad (`.no_pop`): Hefex leaves them off by itself. Check that none of them is in
-     the quote; if one is, set it as below.
-   - Altium Not Fitted in the exported variant: Hefex does not read variants yet, so
-     these parts are in the quote. With the user's consent, set each of them to `dnp`
-     with `hefex_set_part_override` (MPN as described for that tool).
-   Then quote again until `search_pending` is 0.
-7. Point the user to the project's `portal_url` for what only the portal does: confirming
-   the PCB and the parts, requesting and accepting the offer.
+5. Get the requested quantity and call `hefex_get_quote` with `price_if_missing=true`.
+   Use the same quantities when polling. Respect `search_next_attempt_at` and wait
+   until `search_pending` is zero before reporting prices or shortages.
+6. Check that the quote excludes the cost and placement of parts marked `.no_pop` in
+   KiCad or Not Fitted in the chosen Altium variant. An excluded part may still appear
+   in the results. If a correction is needed, compare the reference designators with
+   the BOM line. A `dnp` override applies to the whole part number. If the same part
+   number has both fitted and unpopulated positions, report the discrepancy for review
+   and leave the override alone. When the entire line should be excluded, obtain the
+   user's agreement before using `hefex_set_part_override`. Requote after changes.
+7. Use `hefex_check_parts` to report shortages and suggestions with the completed
+   estimate. Provide the project's `portal_url` for PCB and component confirmation.
+   If the user asks for an offer, use `hefex_request_offer` after confirmation with
+   their chosen delivery option. The user accepts the binding offer in the portal.
 
 Without the MCP server: tell the user where the archive is and that they can upload it at
 https://prototyping.hefex-labs.com.
