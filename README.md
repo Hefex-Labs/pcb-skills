@@ -6,27 +6,27 @@ PCB Skills is a collection of tools from [Hefex Labs](https://hefex-labs.com) fo
 
 ## Install with your assistant
 
-Open the board's project folder in Codex or Claude Code and paste this prompt:
+Install once in Codex or Claude Code to use the skill across your PCB projects. Open a chat in your preferred assistant and paste this prompt:
 
-> Install the `odbpp-export` skill from https://github.com/Hefex-Labs/skills for the assistant I'm using, in this project only. Tell me where you installed it and how I can try it. Just install the skill for now.
+> Install the `odbpp-export` skill from https://github.com/Hefex-Labs/skills for my user account in this assistant so I can use it in all my projects. Tell me when it's ready and how I can try it.
 
 The assistant needs access to this GitHub repository. Exporting a board locally does not require a Hefex account.
 
 <details>
 <summary>Install from a terminal</summary>
 
-With Node.js 22.20 or later installed, run the command for your assistant from the project folder.
+With Node.js 22.20 or later installed, run the command for your assistant from any folder.
 
 **Codex**
 
 ```sh
-npx skills add Hefex-Labs/skills --skill odbpp-export -a codex
+npx skills add Hefex-Labs/skills --skill odbpp-export -a codex --global
 ```
 
 **Claude Code**
 
 ```sh
-npx skills add Hefex-Labs/skills --skill odbpp-export -a claude-code
+npx skills add Hefex-Labs/skills --skill odbpp-export -a claude-code --global
 ```
 
 See the [skills installer documentation](https://github.com/vercel-labs/skills#install-a-skill) for other supported agents.
@@ -34,6 +34,8 @@ See the [skills installer documentation](https://github.com/vercel-labs/skills#i
 </details>
 
 ## Try it on a board
+
+Open a project containing your board and start a new chat in the assistant where you installed the skill.
 
 > Prepare an ODB++ archive from this project. Ask me which assembly variant to use if there are several, tell me which parts will be left off, and show me where you saved the file.
 
