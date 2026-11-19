@@ -2,7 +2,8 @@
 
 These fixtures were authored for the tests in this repository. They use KiCad 8
 file formats and contain two single-pad connectors, J1 and J2, joined by the net
-`LINK`. The part number `SYNTHETIC-TEST-PAD` is test data.
+`/LINK`, KiCad's qualified name for the schematic's local `LINK` label.
+The part number `SYNTHETIC-TEST-PAD` is test data.
 
 The native tests exercise three independent checks.
 

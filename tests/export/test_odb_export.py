@@ -34,6 +34,7 @@ class NativeOdbExportTests(unittest.TestCase):
         self.assertFalse(archive.exists())
         # Use the guide's exact command and defaults, including ZIP and mm.
         result = self.run_cli(temporary, "pcb", "export", "odb", *options, "-o", archive.name, board.name)
+        print(f"ODB++ export ({report_name}) stderr:\n{result.stderr}")
         if report_dir := os.environ.get("PCB_EXPORT_REPORT_DIR"):
             reports = Path(report_dir)
             reports.mkdir(parents=True, exist_ok=True)

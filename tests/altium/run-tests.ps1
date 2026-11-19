@@ -1,3 +1,5 @@
+# Offline Windows regression checks for the real runner. The fixture replaces
+# process launches and UI Automation; these checks do not test an Altium export.
 param(
     [string] $Runner = (Join-Path $PSScriptRoot '..\..\odbpp-export\altium\run.ps1'),
     [string] $Scratch = (Join-Path ([IO.Path]::GetTempPath()) ('hefex-altium-tests-' + [guid]::NewGuid().ToString('N')))

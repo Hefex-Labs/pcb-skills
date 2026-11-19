@@ -29,8 +29,9 @@ jobs:
         env:
           KICAD_IMAGE: ${{ matrix.image }}
         run: |
-          install -d -m 0777 "$RUNNER_TEMP/pcb-checks"
-          docker run --rm --network none --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
+          mkdir -p "$RUNNER_TEMP/pcb-checks"
+          docker run --rm --network none --user "$(id -u):$(id -g)" --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
             --volume "$RUNNER_TEMP/pcb-checks:/reports" --env PCB_PREFLIGHT_REPORT_DIR=/reports \
             --env PCB_EXPORT_REPORT_DIR=/reports/export \
             --env PCB_PREFLIGHT_REQUIRE_NATIVE=1 --env PYTHONDONTWRITEBYTECODE=1 --entrypoint sh "$KICAD_IMAGE" -ec '

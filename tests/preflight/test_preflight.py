@@ -196,7 +196,7 @@ class NativeKiCadTests(unittest.TestCase):
         source = PRACTICE.read_text(encoding="utf-8")
         for name, board_text, expected_conflict in (
             ("matching", source, False),
-            ("wrong_net", source.replace('"LINK"', '"WRONG_LINK"'), True),
+            ("wrong_net", source.replace('"/LINK"', '"WRONG_LINK"'), True),
         ):
             with self.subTest(name=name):
                 case = self.directory / name
