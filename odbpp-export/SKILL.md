@@ -138,9 +138,12 @@ pick parts later in the Hefex portal or through the Hefex MCP tools.
 kicad-cli pcb export odb -o board-odb.zip board.kicad_pcb
 ```
 
-Add `--variant <name>` for the variant the user chose (2a). Defaults (ZIP, millimetres)
-are what Hefex expects. Write the archive next to the project or into a temporary
-folder, not into the user's version-controlled sources unless they ask.
+For a named variant (2a), first check `kicad-cli pcb export odb --help` on the
+installed version. If it lists `--variant`, pass the exact selected name. If the
+option is absent, stop and explain that this CLI cannot select the requested
+variant. A base-board export would contain a different assembly. The default ZIP
+and millimetres work for Hefex. Use an agreed output directory outside version
+control unless the user asks otherwise.
 
 Use a fresh output path so an earlier build cannot pass for this one. After the
 CLI succeeds, open the ZIP read-only, test its CRCs, and locate `matrix/matrix`
