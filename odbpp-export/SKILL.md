@@ -1,16 +1,16 @@
 ---
 name: odbpp-export
-description: Export a KiCad or Altium Designer PCB as an ODB++ archive for a Hefex Labs PCBA quote or order. Use when the user wants to quote, order or upload a KiCad or Altium board to Hefex, or asks for an ODB++ export.
+description: Export and verify a saved KiCad or Altium Designer board as a local ODB++ archive, including assembly variants, do-not-populate parts and an archive path/hash handoff. Use when asked for an ODB++ export or local manufacturing data.
 ---
 
-# ODB++ export for Hefex (KiCad, Altium Designer)
+# Export a board as ODB++ (KiCad and Altium Designer)
 
-Hefex reads one ODB++ archive per board: outline, layers, placements and BOM all come
-from it. No separate Gerber, pick-and-place or BOM files are needed.
+Export one ODB++ archive for the saved board, including its outline, layers,
+placements and component properties.
 
 Which tool: a `.kicad_pcb` or `.kicad_pro` means KiCad (sections 1 to 4), a `.PrjPcb` means
-Altium Designer (section A). Section 0 (state of the tool) and section 5 (hand-over to
-Hefex) apply to both.
+Altium Designer (section A). Start with section 0 for either tool and finish with the
+local handoff in section 5.
 
 ## 0. Before the export: state of the EDA tool
 
@@ -111,23 +111,21 @@ The part stays in the archive; only the flag marks it.
   `FOOTPRINT.AddVariant(name).SetDNP(True)`, then `BOARD.Save`). By script only on their explicit request,
   with KiCad closed, and on a copy first, since it rewrites their board.
 
-Hefex reads `.no_pop` (since 2026-11-06): such parts are neither bought nor placed.
-Check it in the quote (section 5).
-
 ## 3. Check before export
 
-Run the design rules check and report errors to the user before going on:
+Run the design rules check from a temporary folder, substituting the absolute saved
+board path below. Report errors before going on:
 
 ```bash
-kicad-cli pcb drc --severity-error --exit-code-violations -o drc.rpt board.kicad_pcb
+kicad-cli pcb drc --severity-error --exit-code-violations -o drc.rpt "<absolute path to board.kicad_pcb>"
 ```
 
-A non-zero exit code means violations. Show them and ask whether to continue.
+If the report lists violations, show them and ask whether to continue. If the command
+failed to read the board or run the check, report the error before treating the board as checked.
 
-Parts are priced by manufacturer part number. Footprints without an `MPN` field
-(also accepted: `Manufacturer_Part_Number`, `MFR_PN`, `Part_Number` and similar) cannot be
-priced automatically. Mention any that are missing; the user can fix them in KiCad or
-pick parts later in the Hefex portal or through the Hefex MCP tools.
+Check the footprints' manufacturer part numbers (`MPN`, `Manufacturer_Part_Number`,
+`MFR_PN`, `Part_Number` and similar). Report missing or placeholder values with their
+reference designators so these component identities can be resolved before assembly.
 
 ## 4. Export
 
@@ -135,9 +133,19 @@ pick parts later in the Hefex portal or through the Hefex MCP tools.
 kicad-cli pcb export odb -o board-odb.zip board.kicad_pcb
 ```
 
-Add `--variant <name>` for the variant the user chose (2a). Defaults (ZIP, millimetres)
-are what Hefex expects. Write the archive next to the project or into a temporary
-folder, not into the user's version-controlled sources unless they ask.
+For a named variant (2a), first check `kicad-cli pcb export odb --help` on the
+installed version. If it lists `--variant`, pass the exact selected name. If the
+option is absent, stop and explain that this CLI cannot select the requested
+variant. A base-board export would contain a different assembly. The defaults are ZIP
+and millimetres. Use an agreed output directory outside version
+control unless the user asks otherwise.
+
+Use a fresh output path so an earlier build cannot pass for this one. After the
+CLI succeeds, open the ZIP read-only, test its CRCs, and locate `matrix/matrix`
+and the expected board step under `steps/` inside the archive. Check that its
+copper layers match the saved board. A missing step, layer or unreadable member
+is an incomplete export. Report the saved board, variant,
+archive path and SHA-256 together so the user can identify the exact handoff.
 
 Afterwards list the components with `.no_pop` (the attribute's index is in the `@`
 lines at the top of each `components` file) and show them to the user: these are the
@@ -159,8 +167,10 @@ Altium has no command line like `kicad-cli`. The export runs as a script inside 
 
 Create `C:\Users\Public\Documents\Hefex\altium\` and put these four files there,
 exactly as given: `HefexOdbExport.pas`, `HefexScripts.PrjScr`, `Hefex.OutJob`, `run.ps1`.
-They ship with this skill in `altium/`; the Hefex MCP tool `hefex_get_export_guide`
-returns them too, in `files`. Replace older copies: a `Hefex.OutJob` without the
+They ship with this skill in `altium/`, maintained in
+[Hefex-Labs/pcb-skills](https://github.com/Hefex-Labs/pcb-skills/tree/main/odbpp-export/altium).
+
+Replace older copies: a `Hefex.OutJob` without the
 `Configuration1_Item1` line exports no copper layers.
 
 ### A3. Variants (Not Fitted parts)
@@ -201,10 +211,10 @@ values are text strings (`&` lines at the top of the `components` file);
 variant when that variant is missing from its list. This needs
 `IncludeVariantsData=True` in the ODB++ settings, which `Hefex.OutJob` sets.
 
-The archive always carries **all** variants, and it does not record which one is meant:
+The tested archive carries **all** variants, and it does not record which one is meant:
 there is no `.current_variant`, and in the test the components were identical with and
-without the variant set in the output job. So the chosen variant must reach Hefex
-separately: tell the user, and leave its Not Fitted parts off the quote (section 5).
+without the variant set in the output job. Record the chosen variant and its Not Fitted
+designators separately in the local handoff (section 5).
 
 ### A4. Decide the output job and run it exactly once
 
@@ -256,10 +266,14 @@ After `2`, `3` or `5` ask the user before the next attempt; never loop.
 
 ### A5. Find the archive and check it
 
-Altium writes `Project Outputs for <project>\<output name>\` in the project folder (the
-`output_folder` line names it). Take the newest `*.zip` there, for example
-`ODB\PCB1.zip`; Altium also writes a `.tgz` and the unpacked folder. Before uploading,
-check and tell the user about:
+Altium writes `Project Outputs for <project>\<output name>\` in the project folder.
+Before running the export, note existing ZIPs for that project. After it succeeds,
+use the `output_folder` from this run to identify the board ZIP it created or
+rewrote, for example `ODB\PCB1.zip`. If the output is ambiguous, resolve which
+file belongs to the run before handing it over. Altium also writes a `.tgz` and an
+unpacked folder. Open the ZIP read-only, test its CRCs, record its SHA-256 with
+the board and variant, locate `matrix/matrix` and the expected board step under
+`steps/`, and check the following entries.
 
 - copper: `steps/pcb/layers/` must contain `top_layer` and `bottom_layer` (and the inner
   layers of a multilayer board). Without them the output job has no ODB++ settings:
@@ -269,38 +283,31 @@ check and tell the user about:
 - reference designators that are not annotated (containing `?`, for example `J?`):
   annotate in Altium first;
 - components whose part number parameter is missing or holds a value such as `100nF`:
-  they are priced by value and footprint at best, or not at all.
+  report the affected designators so their component identities can be resolved.
 
-Both can be read from `steps/pcb/layers/comp_+_top/components` (and `comp_+_bot`) in
-the archive: `CMP` lines carry the reference designator, `PRP` lines the part number
-properties.
+Read the designators and part numbers from `steps/pcb/layers/comp_+_top/components`
+(and `comp_+_bot`) in the archive. `CMP` lines carry the reference designator, and
+`PRP` lines carry the part number properties.
 
-## 5. Hand over to Hefex
+## 5. Local handoff
 
-With the Hefex MCP server connected (tools named `hefex_*`):
+Report the following together after verification:
 
-1. `hefex_create_project` with the board's name (for example the `.kicad_pcb` file name
-   without extension). Skip this if the user names an existing Hefex project; find it with
-   `hefex_list_projects`.
-2. `hefex_get_upload_command` with the project id and the archive's file name (for Altium
-   the zip, for example `PCB1.zip`).
-3. Run the returned command (`command_windows` on Windows, else `command_posix`) in the
-   folder that holds the archive. The link works once and expires after 15 minutes; on
-   any failure ask for a new command instead of retrying the old one.
-4. Poll `hefex_get_parse_status` every few seconds until `status` is `done` or `failed`.
-   On `failed`, show `error_message` and stop.
-5. Ask the user for the quantity (boards to fabricate; assembled boards default to all of
-   them), then `hefex_get_quote` with `price_if_missing=true` and `hefex_check_parts`.
-   Report the total, and every part that is not in stock with the suggested alternatives.
-6. Parts that are not populated:
-   - KiCad (`.no_pop`): Hefex leaves them off by itself. Check that none of them is in
-     the quote; if one is, set it as below.
-   - Altium Not Fitted in the exported variant: Hefex does not read variants yet, so
-     these parts are in the quote. With the user's consent, set each of them to `dnp`
-     with `hefex_set_part_override` (MPN as described for that tool).
-   Then quote again until `search_pending` is 0.
-7. Point the user to the project's `portal_url` for what only the portal does: confirming
-   the PCB and the parts, requesting and accepting the offer.
+- The saved board or project path, its revision if known, and the EDA tool version.
+- The exact chosen variant, or the base state when no named variant was selected.
+- The archive's absolute path and SHA-256.
+- The not-fitted reference designators for that selection, from KiCad's `.no_pop`
+  attributes or Altium's variant membership. State when the list is empty.
+- The CRC, matrix, board-step and copper-layer checks, plus unresolved design-rule
+  findings or missing part numbers.
 
-Without the MCP server: tell the user where the archive is and that they can upload it at
-https://prototyping.hefex-labs.com.
+Keep the selected variant and not-fitted list alongside the archive even when the
+archive omits the active variant. Resolve a mismatch between that selection and the
+exported assembly before reporting the handoff as complete.
+
+## Optional continuation with Hefex MCP
+
+If the user asks to continue with Hefex MCP, pass this local handoff to the connected
+assistant. For example, “Use this verified ODB++ archive with Hefex, keeping the chosen
+variant and not-fitted designators from the handoff.” The MCP guide can also return
+the export kit files directly.

@@ -1,0 +1,66 @@
+name: Check PCB skills
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: '9.0'
+            image: ghcr.io/kicad/kicad:9.0@sha256:cef4a572df1465b98fa63cdac88780e0f8d39f03c5493434802bcd92f62123fb
+          - version: '10.0'
+            image: ghcr.io/kicad/kicad:10.0@sha256:05f6ac957e351bbbd9e1f9c996be997f61948ed9f94e0c3cab336bfcaf60161c
+    name: KiCad ${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check board preflight and manufacturing export offline
+        env:
+          KICAD_IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pcb-checks"
+          docker run --rm --network none --user "$(id -u):$(id -g)" --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
+            --volume "$RUNNER_TEMP/pcb-checks:/reports" --env PCB_PREFLIGHT_REPORT_DIR=/reports \
+            --env PCB_EXPORT_REPORT_DIR=/reports/export \
+            --env PCB_PREFLIGHT_REQUIRE_NATIVE=1 --env PYTHONDONTWRITEBYTECODE=1 --entrypoint sh "$KICAD_IMAGE" -ec '
+              kicad-cli version
+              python3 -m unittest discover -s tests/preflight -v
+              python3 -m unittest discover -s tests/export -v
+            '
+      - name: Save native check reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kicad-${{ matrix.version }}-reports
+          path: ${{ runner.temp }}/pcb-checks
+          retention-days: 7
+      - name: Check revision comparisons
+        if: matrix.version == '10.0'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/revision-tests"
+          "$RUNNER_TEMP/revision-tests/bin/pip" install pytest==9.2.0
+          "$RUNNER_TEMP/revision-tests/bin/python" -m pytest tests/revision -q
+
+  altium-runner:
+    name: Altium runner on Windows
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check completion, errors and desktop guards
+        shell: powershell
+        run: ./tests/altium/run-tests.ps1
