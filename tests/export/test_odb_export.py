@@ -24,16 +24,24 @@ class NativeOdbExportTests(unittest.TestCase):
             env={**os.environ, "KICAD_CONFIG_HOME": str(temporary / "config")},
             capture_output=True, text=True, timeout=90,
         )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
         return result
 
-    def export(self, temporary: Path, source: bytes) -> Path:
+    def export(self, temporary: Path, source: bytes, *options: str, report_name: str = "base") -> Path:
         board = temporary / "board.kicad_pcb"
         board.write_bytes(source)
         archive = temporary / "board-odb.zip"
         self.assertFalse(archive.exists())
         # Use the guide's exact command and defaults, including ZIP and mm.
-        self.run_cli(temporary, "pcb", "export", "odb", "-o", archive.name, board.name)
+        result = self.run_cli(temporary, "pcb", "export", "odb", *options, "-o", archive.name, board.name)
+        if report_dir := os.environ.get("PCB_EXPORT_REPORT_DIR"):
+            reports = Path(report_dir)
+            reports.mkdir(parents=True, exist_ok=True)
+            version = self.run_cli(temporary, "version").stdout.strip()
+            stem = f"kicad-{re.sub(r'[^A-Za-z0-9._-]', '_', version)}-{report_name}"
+            (reports / f"{stem}.stdout.txt").write_text(result.stdout, encoding="utf-8")
+            (reports / f"{stem}.stderr.txt").write_text(result.stderr, encoding="utf-8")
+            shutil.copyfile(archive, reports / f"{stem}.zip")
         self.assertEqual(board.read_bytes(), source, "Export rewrote the saved board")
         self.assertTrue(is_zipfile(archive), "The default export is not a ZIP archive")
         return archive
@@ -55,6 +63,17 @@ class NativeOdbExportTests(unittest.TestCase):
         self.assertEqual(set(records), {"J1", "J2"})
         return records
 
+    def dnp_references(self, text: str) -> set[str]:
+        names = re.findall(r"^@(\d+)\s+\.no_pop\s*$", text, re.MULTILINE)
+        self.assertLessEqual(len(names), 1)
+        if not names:
+            return set()
+        attribute = names[0]
+        return {
+            reference for reference, (_, attributes) in self.components(text).items()
+            if any(value.strip() in (attribute, attribute + "=1") for value in attributes.split(","))
+        }
+
     def test_default_export_contains_real_placements_copper_and_outline(self):
         original = PRACTICE.read_bytes()
         with tempfile.TemporaryDirectory() as directory:
@@ -71,7 +90,7 @@ class NativeOdbExportTests(unittest.TestCase):
                 self.assertRegex(matrix, r"(?s)STEP\s*\{[^}]*\bNAME=PCB\b")
                 layers = {}
                 for block in re.findall(r"LAYER\s*\{([^}]*)\}", matrix):
-                    fields = dict(re.findall(r"^\s*([A-Z_]+)=(.*)$", block, re.MULTILINE))
+                    fields = {key: value.strip() for key, value in re.findall(r"^\s*([A-Z_]+)=(.*)$", block, re.MULTILINE)}
                     layers[fields["NAME"].lower()] = fields["TYPE"]
                 self.assertEqual(layers["f.cu"], "SIGNAL")
                 self.assertEqual(layers["b.cu"], "SIGNAL")
@@ -109,17 +128,33 @@ class NativeOdbExportTests(unittest.TestCase):
         self.assertEqual(original.count(b"(attr smd)"), 2)
         dnp = original.replace(b"(attr smd)", b"(attr smd dnp)", 1)
         with tempfile.TemporaryDirectory() as directory:
-            with ZipFile(self.export(Path(directory), dnp)) as archive:
+            with ZipFile(self.export(Path(directory), dnp, report_name="dnp")) as archive:
                 self.assertIsNone(archive.testzip())
                 text = self.read_member(archive, "steps/pcb/layers/comp_+_top/components")
-                names = re.findall(r"^@(\d+)\s+\.no_pop\s*$", text, re.MULTILINE)
-                self.assertEqual(len(names), 1, "This KiCad export did not preserve the guide's DNP flag")
-                attribute = names[0]
-                placements = self.components(text)
-                for reference, expected_dnp in (("J1", True), ("J2", False)):
-                    attributes = placements[reference][1].split(",")
-                    marked = any(value.strip() in (attribute, attribute + "=1") for value in attributes)
-                    self.assertEqual(marked, expected_dnp, reference)
+                self.components(text)
+                self.assertEqual(self.dnp_references(text), {"J1"}, "The DNP flag must apply only to J1")
+            self.assertEqual(PRACTICE.read_bytes(), original)
+
+    def test_named_variant_changes_only_the_requested_population_state(self):
+        original = PRACTICE.read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            help_text = self.run_cli(temporary, "pcb", "export", "odb", "--help").stdout
+            if "--variant" not in help_text:
+                self.skipTest("This KiCad CLI does not advertise ODB++ --variant")
+            # These are KiCad 10's saved-board variant records. The fixture's
+            # base state stays populated, while the named variant marks J1 DNP.
+            source = original.replace(b'(paper "A4")', b'(paper "A4")\n  (variants (variant (name "Lite")))', 1)
+            source = source.replace(b"(attr smd)", b'(attr smd)\n    (variant (name "Lite") (dnp yes))', 1)
+            for name, options, expected in (("base", (), set()), ("lite", ("--variant", "Lite"), {"J1"})):
+                with self.subTest(export=name):
+                    output = temporary / name
+                    output.mkdir()
+                    with ZipFile(self.export(output, source, *options, report_name=f"variant-{name}")) as archive:
+                        self.assertIsNone(archive.testzip())
+                        text = self.read_member(archive, "steps/pcb/layers/comp_+_top/components")
+                        self.components(text)
+                        self.assertEqual(self.dnp_references(text), expected)
             self.assertEqual(PRACTICE.read_bytes(), original)
 
 

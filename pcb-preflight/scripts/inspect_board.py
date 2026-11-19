@@ -83,26 +83,30 @@ def inventory(path: Path, *, variant: str | None = None, base: bool = False,
         legacy = {p[1]: p[2] for p in children(footprint, "fp_text")
                   if len(p) > 2 and isinstance(p[1], str) and isinstance(p[2], str)}
         reference = properties.get("Reference", legacy.get("reference", ""))
+        anchor = {"reference": reference, "uuid": value(footprint, "uuid", value(footprint, "tstamp"))}
         attrs = [a for group in children(footprint, "attr") for a in group[1:]]
         dnp = "dnp" in attrs
+        mpn_assessment = "board_properties"
         matched_variant = [v for v in children(footprint, "variant")
                            if variant is not None and value(v, "name") == variant]
         for override in matched_variant:
             dnp_override = value(override, "dnp")
+            if dnp_override is not None and dnp_override not in ("yes", "no"):
+                raise ValueError(f"Invalid DNP override for {reference!r} in variant {variant!r}")
             if dnp_override in ("yes", "no"):
                 dnp = dnp_override == "yes"
             if any(isinstance(v, list) and v and v[0] not in {"name", "dnp"} for v in override):
-                findings.append({"kind": "variant_properties_need_review", "reference": reference})
+                mpn_assessment = "unassessed_variant_properties"
+                findings.append({"kind": "variant_properties_need_review", **anchor})
         mpn_properties = {k: v for k, v in properties.items() if normalized(k) in selected_fields}
         identifiers = sorted({v.strip() for v in mpn_properties.values()
                               if v.strip() and v.strip().casefold() not in PLACEHOLDERS})
-        anchor = {"reference": reference, "uuid": value(footprint, "uuid", value(footprint, "tstamp"))}
-        if len(identifiers) > 1:
+        if mpn_assessment == "board_properties" and len(identifiers) > 1:
             findings.append({"kind": "conflicting_mpn_fields", **anchor, "properties": mpn_properties})
         excluded = "exclude_from_bom" in attrs
         if excluded and not dnp:
             findings.append({"kind": "excluded_from_bom_needs_assembly_intent", **anchor})
-        if not dnp and not excluded and not identifiers:
+        if mpn_assessment == "board_properties" and not dnp and not excluded and not identifiers:
             findings.append({"kind": "missing_populated_mpn", **anchor})
         if not reference or reference.endswith("**"):
             findings.append({"kind": "unassigned_reference", **anchor})
@@ -111,6 +115,7 @@ def inventory(path: Path, *, variant: str | None = None, base: bool = False,
             **anchor, "footprint": footprint[1], "layer": value(footprint, "layer"),
             "position": positions[0][1:] if positions else None,
             "dnp": dnp, "excluded_from_bom": excluded, "mpn_properties": mpn_properties,
+            "mpn_assessment": mpn_assessment,
         })
     return {
         "schema": "pcb-preflight-inventory-v1", "source": str(path.resolve()),

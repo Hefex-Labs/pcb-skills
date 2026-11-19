@@ -29,15 +29,37 @@ jobs:
         env:
           KICAD_IMAGE: ${{ matrix.image }}
         run: |
+          install -d -m 0777 "$RUNNER_TEMP/pcb-checks"
           docker run --rm --network none --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
-            --env PYTHONDONTWRITEBYTECODE=1 --entrypoint sh "$KICAD_IMAGE" -ec '
+            --volume "$RUNNER_TEMP/pcb-checks:/reports" --env PCB_PREFLIGHT_REPORT_DIR=/reports \
+            --env PCB_EXPORT_REPORT_DIR=/reports/export \
+            --env PCB_PREFLIGHT_REQUIRE_NATIVE=1 --env PYTHONDONTWRITEBYTECODE=1 --entrypoint sh "$KICAD_IMAGE" -ec '
               kicad-cli version
               python3 -m unittest discover -s tests/preflight -v
               python3 -m unittest discover -s tests/export -v
             '
+      - name: Save native check reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kicad-${{ matrix.version }}-reports
+          path: ${{ runner.temp }}/pcb-checks
+          retention-days: 7
       - name: Check revision comparisons
         if: matrix.version == '10.0'
         run: |
           python3 -m venv "$RUNNER_TEMP/revision-tests"
           "$RUNNER_TEMP/revision-tests/bin/pip" install pytest==9.2.0
           "$RUNNER_TEMP/revision-tests/bin/python" -m pytest tests/revision -q
+
+  altium-runner:
+    name: Altium runner on Windows
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check completion, errors and desktop guards
+        shell: powershell
+        run: ./tests/altium/run-tests.ps1

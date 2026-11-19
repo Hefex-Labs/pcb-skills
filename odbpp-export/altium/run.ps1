@@ -45,7 +45,6 @@ function Get-AltiumDialogs {
     return $result
 }
 
-$exe = Get-AltiumExe
 $procs = @(Get-Process X2 -ErrorAction SilentlyContinue)
 # Started by a script, Altium once came up without any window; the user starts it.
 if ($procs.Count -eq 0) { "error: Altium is not running; ask the user to start it and wait for its main window"; exit 6 }
@@ -58,6 +57,7 @@ $main = @($A::RootElement.FindAll([System.Windows.Automation.TreeScope]::Childre
 if (-not $main) { "error: Altium has no main window yet (still starting?)"; exit 6 }
 $d = Get-AltiumDialogs
 if ($d) { "error: dialog open"; $d | ForEach-Object { "dialog: $_" }; exit 2 }
+$exe = Get-AltiumExe
 # Clears a script paused in the debugger; harmless otherwise.
 Start-Process -Wait -FilePath $exe -ArgumentList '-REditScript:Stop'
 Start-Sleep -Seconds 3
@@ -78,7 +78,7 @@ $deadline = (Get-Date).AddSeconds($TimeoutSec)
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 3
     if (Test-Path $StatusFile) {
-        $lines = Get-Content $StatusFile
+        $lines = @(Get-Content $StatusFile)
         if ($lines | Where-Object { $_ -like 'error:*' }) { $lines; exit 1 }
         if ($lines -and ($lines[-1] -eq 'done')) { $lines; exit 0 }
     }

@@ -71,6 +71,9 @@ If variants are present, the helper requires an exact `--variant` or explicit
 First verify that it contains manufacturer identifiers, rather than internal
 article numbers. The helper reports base board properties and recognized DNP
 overrides. Other variant attributes require inspection in KiCad or the source.
+For those footprints it reports `mpn_assessment=unassessed_variant_properties`
+and retains the base properties as context. Establish the selected variant's MPN
+in the EDA tool before deciding whether it is missing or conflicting.
 
 Cross-check the populated references against the root schematic's BOM and
 properties when available. KiCad's native BOM export can provide this evidence

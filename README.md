@@ -41,6 +41,6 @@ See the [installer documentation](https://github.com/vercel-labs/skills#install-
 
 ## From design to assembly
 
-The preflight uses KiCad’s electrical and design rule checks. For an ODB++ export, use a KiCad version with `kicad-cli pcb export odb`, or Altium Designer on Windows. The Altium export kit was tested with Designer 26 Standard.
+The preflight uses KiCad’s electrical and design rule checks. The ODB++ exporter works with KiCad 9 and 10. For a named assembly variant, use a version whose `pcb export odb --help` lists `--variant`. On Windows, the Altium export kit was originally tested with Designer 26 Standard.
 
 Ready to price the board? [Upload the ODB++ archive to Hefex](https://prototyping.hefex-labs.com) or [connect your assistant](https://prototyping.hefex-labs.com/agents) and ask for a quote.
