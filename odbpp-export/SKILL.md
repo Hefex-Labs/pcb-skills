@@ -3,7 +3,7 @@ name: odbpp-export
 description: Prepare a saved KiCad or Altium Designer board for ODB++ export, including assembly variants and do-not-populate parts. Use for a local manufacturing archive or when a user asks to upload or quote the board with Hefex.
 ---
 
-# ODB++ export for Hefex (KiCad, Altium Designer)
+# Export a board as ODB++ (KiCad and Altium Designer)
 
 Hefex reads one ODB++ archive per board: outline, layers, placements and BOM all come
 from it. No separate Gerber, pick-and-place or BOM files are needed.
@@ -142,6 +142,12 @@ Add `--variant <name>` for the variant the user chose (2a). Defaults (ZIP, milli
 are what Hefex expects. Write the archive next to the project or into a temporary
 folder, not into the user's version-controlled sources unless they ask.
 
+Use a fresh output path so an earlier build cannot pass for this one. After the
+CLI succeeds, open the ZIP read-only, test its CRCs, and locate `matrix/matrix`
+and the expected board step under `steps/` inside the archive. A missing step or
+unreadable member is an incomplete export. Report the saved board, variant,
+archive path and SHA-256 together so the user can identify the exact handoff.
+
 Afterwards list the components with `.no_pop` (the attribute's index is in the `@`
 lines at the top of each `components` file) and show them to the user: these are the
 parts that will not be placed.
@@ -259,10 +265,13 @@ After `2`, `3` or `5` ask the user before the next attempt; never loop.
 
 ### A5. Find the archive and check it
 
-Altium writes `Project Outputs for <project>\<output name>\` in the project folder (the
-`output_folder` line names it). Take the newest `*.zip` there, for example
-`ODB\PCB1.zip`; Altium also writes a `.tgz` and the unpacked folder. Before uploading,
-check and tell the user about:
+Altium writes `Project Outputs for <project>\<output name>\` in the project folder.
+Before running the export, note existing ZIPs for that project. After it succeeds,
+use the `output_folder` from this run to identify the board ZIP it created or
+rewrote, for example `ODB\PCB1.zip`. If the output is ambiguous, resolve which
+file belongs to the run before handing it over. Altium also writes a `.tgz` and an
+unpacked folder. Open the ZIP read-only, test its CRCs, record its SHA-256 with
+the board and variant, and check the following entries.
 
 - copper: `steps/pcb/layers/` must contain `top_layer` and `bottom_layer` (and the inner
   layers of a multilayer board). Without them the output job has no ODB++ settings:

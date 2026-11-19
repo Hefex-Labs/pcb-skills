@@ -1,0 +1,30 @@
+name: Check PCB skills
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 12
+    steps:
+      - name: Install KiCad and test dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends ca-certificates git kicad python3-pytest
+          kicad-cli version
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check board preflight and revision review
+        run: |
+          python3 -m unittest discover -s tests/preflight -v
+          python3 -m pytest tests/revision -q
